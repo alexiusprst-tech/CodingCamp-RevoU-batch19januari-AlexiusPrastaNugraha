@@ -99,6 +99,7 @@ body {
     gap: 15px;
     margin-bottom: 20px;
     flex-wrap: wrap;
+    align-items: center;
 }
 
 .input-group {
@@ -140,6 +141,11 @@ body {
     cursor: pointer;
     transition: all 0.3s ease;
     box-shadow: 0 5px 15px rgba(245, 87, 108, 0.4);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    overflow: hidden;
 }
 
 .add-btn:hover {
@@ -149,6 +155,22 @@ body {
 
 .add-btn:active {
     transform: translateY(0);
+}
+
+/* Editing state: tombol melebar menjadi 'Simpan' */
+.add-btn.editing {
+    width: auto;
+    min-width: 110px;
+    padding: 0 16px;
+    font-size: 15px;
+    font-weight: 700;
+    height: 50px;
+}
+
+/* Input visual cue saat sedang edit */
+.task-input.editing {
+    border-color: #f093fb;
+    box-shadow: 0 0 0 6px rgba(240, 147, 251, 0.07);
 }
 
 /* Error Message */
@@ -521,7 +543,7 @@ body {
     -webkit-animation: fadeIn 0.3s ease;
 }
 
-/* Inline Edit Input */
+/* Inline Edit Input (keperluan jika ingin tampilkan input di row) */
 .inline-edit-input {
     width: 100%;
     padding: 8px 12px;
@@ -536,4 +558,10 @@ body {
     outline: none;
     border-color: #667eea;
     box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+}
+
+/* Minor: transisi halus */
+.add-btn,
+.add-btn * {
+    transition: color 0.15s ease, background 0.15s ease, transform 0.15s ease;
 }

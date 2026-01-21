@@ -1,13 +1,17 @@
-// To-Do List Application
+// js/script.js
+// Single JS file for the entire project — handles add, filter, edit (via form), delete, validation, stats.
+
 class TodoApp {
     constructor() {
         this.tasks = JSON.parse(localStorage.getItem('tasks')) || [];
         this.currentFilter = 'all';
         this.sortBy = 'date'; // 'date' or 'name'
         this.sortOrder = 'asc'; // 'asc' or 'desc'
-        
+        this.editingId = null;  // holds id when editing
+
         this.initializeElements();
         this.attachEventListeners();
+        this.setDefaultDate();
         this.render();
     }
 
@@ -23,47 +27,55 @@ class TodoApp {
         this.tasksTableBody = document.getElementById('tasksTableBody');
         this.emptyState = document.getElementById('emptyState');
         this.errorMessage = document.getElementById('errorMessage');
-        
+
         this.totalTasksEl = document.getElementById('totalTasks');
         this.completedTasksEl = document.getElementById('completedTasks');
         this.pendingTasksEl = document.getElementById('pendingTasks');
         this.progressPercentageEl = document.getElementById('progressPercentage');
         this.progressBar = document.getElementById('progressBar');
-
-
     }
 
     attachEventListeners() {
-        this.addBtn.addEventListener('click', () => this.addTask());
+        this.addBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            this.addTask();
+        });
+
         this.taskInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.addTask();
         });
+
         this.dateInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.addTask();
         });
 
         this.searchInput.addEventListener('input', () => this.render());
-        this.searchInput.addEventListener('keydown', (e) => {
-            if (e.ctrlKey && e.key === 'f') {
-                e.preventDefault();
-                this.searchInput.focus();
-            }
-        });
 
         this.sortBtn.addEventListener('click', () => this.toggleSort());
         this.filterBtn.addEventListener('click', () => this.toggleFilterDropdown());
         this.deleteAllBtn.addEventListener('click', () => this.deleteAllTasks());
 
         document.querySelectorAll('.filter-option').forEach(btn => {
-            btn.addEventListener('click', (e) => this.setFilter(e.target.dataset.filter));
+            btn.addEventListener('click', (e) => this.setFilter(e.currentTarget.dataset.filter));
         });
 
+        // global keyboard for search focus (Ctrl+F)
         document.addEventListener('keydown', (e) => {
             if (e.ctrlKey && e.key === 'f') {
                 e.preventDefault();
                 this.searchInput.focus();
             }
+            // ESC to cancel editing
+            if (e.key === 'Escape' && this.editingId) {
+                this.cancelEditing();
+            }
         });
+    }
+
+    setDefaultDate() {
+        // set date input default to today
+        const today = new Date().toISOString().split('T')[0];
+        if (!this.dateInput.value) this.dateInput.value = today;
     }
 
     validateInput() {
@@ -85,8 +97,10 @@ class TodoApp {
             return false;
         }
 
-        const selectedDate = new Date(dueDate);
-        if (selectedDate < new Date(new Date().toISOString().split('T')[0])) {
+        const selectedDate = new Date(dueDate + 'T00:00:00');
+        const today = new Date(new Date().toISOString().split('T')[0] + 'T00:00:00');
+
+        if (selectedDate < today) {
             this.showError('Due date cannot be in the past');
             return false;
         }
@@ -97,31 +111,56 @@ class TodoApp {
     showError(message) {
         this.errorMessage.textContent = message;
         this.errorMessage.classList.add('show');
-        setTimeout(() => {
+        clearTimeout(this._errorTimeout);
+        this._errorTimeout = setTimeout(() => {
             this.errorMessage.classList.remove('show');
         }, 3000);
     }
 
     addTask() {
+        // If editing, update existing; otherwise create new
         if (!this.validateInput()) return;
 
+        const name = this.taskInput.value.trim();
+        const dueDate = this.dateInput.value;
+
+        if (this.editingId) {
+            const task = this.tasks.find(t => t.id === this.editingId);
+            if (task) {
+                task.name = name;
+                task.dueDate = dueDate;
+                this.saveTasks();
+                this.stopEditingUI();
+                this.render();
+                this.taskInput.value = '';
+                this.setDefaultDate();
+            } else {
+                // fallback: if no task found, clear editing
+                this.stopEditingUI();
+            }
+            return;
+        }
+
         const task = {
-            id: Date.now(),
-            name: this.taskInput.value.trim(),
-            dueDate: this.dateInput.value,
+            id: Date.now().toString(),
+            name,
+            dueDate,
             completed: false,
             createdAt: new Date().toISOString()
         };
 
         this.tasks.push(task);
         this.saveTasks();
+
         this.taskInput.value = '';
-        this.dateInput.value = new Date().toISOString().split('T')[0];
+        this.setDefaultDate();
         this.render();
     }
 
     deleteTask(id) {
         this.tasks = this.tasks.filter(task => task.id !== id);
+        // if we were editing this task, cancel edit
+        if (this.editingId === id) this.cancelEditing();
         this.saveTasks();
         this.render();
     }
@@ -135,25 +174,30 @@ class TodoApp {
         }
     }
 
+    // Edit: populate form with task values so user can edit using main form
     editTask(id) {
         const task = this.tasks.find(task => task.id === id);
-        if (task) {
-            const newName = prompt('Edit task name:', task.name);
-            if (newName !== null && newName.trim() !== '') {
-                const newDate = prompt('Edit due date (YYYY-MM-DD):', task.dueDate);
-                if (newDate !== null && newDate !== '') {
-                    const selectedDate = new Date(newDate);
-                    if (selectedDate >= new Date(new Date().toISOString().split('T')[0])) {
-                        task.name = newName.trim();
-                        task.dueDate = newDate;
-                        this.saveTasks();
-                        this.render();
-                    } else {
-                        this.showError('Due date cannot be in the past');
-                    }
-                }
-            }
-        }
+        if (!task) return;
+        this.editingId = id;
+        this.taskInput.value = task.name;
+        this.dateInput.value = task.dueDate;
+        this.addBtn.classList.add('editing');
+        this.addBtn.textContent = 'Simpan';
+        this.taskInput.classList.add('editing');
+        this.taskInput.focus();
+    }
+
+    cancelEditing() {
+        this.editingId = null;
+        this.stopEditingUI();
+        this.taskInput.value = '';
+        this.setDefaultDate();
+    }
+
+    stopEditingUI() {
+        this.addBtn.classList.remove('editing');
+        this.addBtn.textContent = '+';
+        this.taskInput.classList.remove('editing');
     }
 
     deleteAllTasks() {
@@ -165,6 +209,7 @@ class TodoApp {
         if (confirm('Are you sure you want to delete all tasks? This action cannot be undone.')) {
             this.tasks = [];
             this.saveTasks();
+            this.stopEditingUI();
             this.render();
         }
     }
@@ -188,13 +233,14 @@ class TodoApp {
         document.querySelectorAll('.filter-option').forEach(btn => {
             btn.classList.remove('active');
         });
-        document.querySelector(`[data-filter="${filter}"]`).classList.add('active');
+        const el = document.querySelector(`[data-filter="${filter}"]`);
+        if (el) el.classList.add('active');
         this.filterDropdown.classList.add('hidden');
         this.render();
     }
 
     getFilteredAndSortedTasks() {
-        let filteredTasks = this.tasks;
+        let filteredTasks = [...this.tasks];
 
         // Filter by status
         if (this.currentFilter === 'completed') {
@@ -241,7 +287,7 @@ class TodoApp {
     }
 
     formatDate(dateString) {
-        const date = new Date(dateString);
+        const date = new Date(dateString + 'T00:00:00');
         const today = new Date();
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1);
@@ -300,7 +346,9 @@ class TodoApp {
         // Add event listeners to action buttons
         tr.querySelector('.toggle-btn').addEventListener('click', () => this.toggleTaskStatus(task.id));
         tr.querySelector('.edit-btn').addEventListener('click', () => this.editTask(task.id));
-        tr.querySelector('.delete-btn').addEventListener('click', () => this.deleteTask(task.id));
+        tr.querySelector('.delete-btn').addEventListener('click', () => {
+            if (confirm('Delete this task?')) this.deleteTask(task.id);
+        });
 
         return tr;
     }
